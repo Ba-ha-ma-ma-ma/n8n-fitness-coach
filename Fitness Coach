@@ -1,0 +1,1606 @@
+{
+  "name": "Fitness Coach",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "=https://www.polaraccesslink.com/v3/users/activities/{{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "a7b3f6c8-16d4-4fae-8602-ab6bd2a2dfb4",
+      "name": "1. Activity Data (Gestern)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2272,
+        2016
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "TWogbPlClLCsT2bt",
+          "name": "Polar Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.polaraccesslink.com/v3/users/sleep/{{ $now.format('yyyy-MM-dd') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "2e591ed2-09b3-431f-b140-8a8fd1dfe6ef",
+      "name": "2. Sleep Data (Letzte Nacht)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2272,
+        2208
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "TWogbPlClLCsT2bt",
+          "name": "Polar Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.polaraccesslink.com/v3/users/sleepwise/alertness/date?from={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}&to={{ $now.format('yyyy-MM-dd') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "e2f87b82-80f6-4d1b-a1bb-d9739b4389eb",
+      "name": "3. SleepWise (Letzte Nacht)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2272,
+        2400
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "TWogbPlClLCsT2bt",
+          "name": "Polar Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://www.polaraccesslink.com/v3/users/nightly-recharge/{{ $now.format('yyyy-MM-dd') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "4c00e0f1-06a0-422d-8472-6c7bc5efe1ec",
+      "name": "4. Nightly Recharge (Letzte Nacht)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2272,
+        2592
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "TWogbPlClLCsT2bt",
+          "name": "Polar Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Activity Data transformieren\nconst activity = $input.item.json;\nconst dateYesterday = new Date();\ndateYesterday.setDate(dateYesterday.getDate() - 1);\n\n// Parse ISO 8601 Duration (z.B. \"PT2H47M30S\")\nfunction parseDuration(duration) {\n  if (!duration) return 0;\n  const matches = duration.match(/PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?/);\n  if (!matches) return 0;\n  const hours = parseInt(matches[1] || 0);\n  const minutes = parseInt(matches[2] || 0);\n  const seconds = parseInt(matches[3] || 0);\n  return hours * 60 + minutes + Math.round(seconds / 60);\n}\n\nreturn {\n  datum_iso: dateYesterday.toISOString().split('T')[0],\n  \n  aktivDauerMin: parseDuration(activity.active_duration),\n  inaktivDauerMin: parseDuration(activity.inactive_duration),\n  tagesAktivitaet: activity.daily_activity,\n  kalorien: activity.calories,\n  aktiveKalorien: activity.active_calories,\n  schritte: activity.steps,\n  inaktivitaetsWarnungen: activity.inactivity_alert_count,\n  distanzMeter: Math.round(activity.distance_from_steps)\n};"
+      },
+      "id": "1be4c407-1540-436b-bf9e-8d594ff7c13b",
+      "name": "5a. Transform Activity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        2016
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sleep = $input.item.json;\n// Nutze den START des Schlafs für das Datum (nicht das Ende)\nconst dateObj = new Date(sleep.sleep_start_time);\nconst datum_iso = dateObj.toISOString().split('T')[0]; // 2025-10-21\n\nconst lightSleepMin = Math.round(sleep.light_sleep / 60);\nconst deepSleepMin = Math.round(sleep.deep_sleep / 60);\nconst remSleepMin = Math.round(sleep.rem_sleep / 60);\nconst totalMin = lightSleepMin + deepSleepMin + remSleepMin;\n\nreturn {\n  datum_iso: datum_iso,\n  \n  startzeit: sleep.sleep_start_time,\n  endzeit: sleep.sleep_end_time,\n  \n  leichtschlafMin: lightSleepMin,\n  tiefschlafMin: deepSleepMin,\n  remSchlafMin: remSleepMin,\n  gesamtschlafMin: totalMin,\n  unterbrechungMin: Math.round(sleep.total_interruption_duration / 60),\n  kurzeUnterbrechungMin: Math.round(sleep.short_interruption_duration / 60),\n  langeUnterbrechungMin: Math.round(sleep.long_interruption_duration / 60),\n  \n  schlafwert: sleep.sleep_score,\n  schlafCharge: sleep.sleep_charge,\n  kontinuitaet: sleep.continuity,\n  kontinuitaetsklasse: sleep.continuity_class,\n  eigenbewertung: sleep.sleep_rating,\n  schlafzyklen: sleep.sleep_cycles,\n  \n  dauerwert: sleep.group_duration_score,\n  festigkeitswert: sleep.group_solidity_score,\n  regenerationswert: sleep.group_regeneration_score,\n  schlafzielMin: Math.round(sleep.sleep_goal / 60),\n  \n//  hypnogramm: JSON.stringify(sleep.hypnogram),\n//  herzfrequenz: JSON.stringify(sleep.heart_rate_samples)\n};"
+      },
+      "id": "bdb5da6f-0c61-4d22-b5ed-e0717d89f32d",
+      "name": "5b. Transform Sleep",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        2208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SleepWise Alertness transformieren\nconst sleepwise = $input.item.json;\nconst dateObj = new Date(sleepwise.sleep_period_start_time);\n\nreturn {\n  datum_iso: dateObj.toISOString().split('T')[0],\n  \n  bewertung: sleepwise.grade,\n  bewertungstyp: sleepwise.grade_type,\n  bewertungsklassifizierung: sleepwise.grade_classification,\n  schlaftraegheit: sleepwise.sleep_inertia,\n  schlaftyp: sleepwise.sleep_type,\n  \n  schlafStart: sleepwise.sleep_period_start_time,\n  schlafEnde: sleepwise.sleep_period_end_time,\n};"
+      },
+      "id": "a5c9d975-4d62-4b64-9dac-eb8150569cd3",
+      "name": "5c. Transform SleepWise",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        2400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Nightly Recharge transformieren\nconst recharge = $input.item.json;\nconst dateObj = new Date(recharge.date);\n\nreturn {\n  datum_iso: recharge.date,\n  \n  herzfrequenzDurchschnitt: recharge.heart_rate_avg,\n  beatToBeatDurchschnitt: recharge.beat_to_beat_avg,\n  hrvDurchschnitt: recharge.heart_rate_variability_avg,\n  atemfrequenzDurchschnitt: recharge.breathing_rate_avg,\n  \n  nightlyRechargeStatus: recharge.nightly_recharge_status,\n  ansCharge: recharge.ans_charge,\n  ansChargeStatus: recharge.ans_charge_status,\n  \n//  hrvSamples: JSON.stringify(recharge.hrv_samples),\n//  atemSamples: JSON.stringify(recharge.breathing_samples)\n};"
+      },
+      "id": "3458b49b-ee96-4186-83ec-a4dccb7fbe78",
+      "name": "5d. Transform Nightly Recharge",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        2592
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2720,
+        2368
+      ],
+      "id": "3e2a4f91-fefd-430d-9fc4-36ab31763751",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Alle 4 Items vom Merge Node\nconst items = $input.all();\n\nconst sleep = items[0].json;\nconst sleepwise = items[1].json;\nconst recharge = items[2].json;\n\nconst sleepDate = new Date(sleep.datum_iso);\n\nreturn {\n  // Datum (von gestern - Activity)\n  jahr: sleepDate.getFullYear().toString(),\n  monat: (sleepDate.getMonth() + 1).toString(),\n  tag: sleepDate.getDate().toString(),\n  datum_iso: sleep.datum_iso,\n\n  // Sleep Data\n  schlafStartzeit: sleep.startzeit,\n  schlafEndzeit: sleep.endzeit,\n  schlafLeichtschlafMin: sleep.leichtschlafMin,\n  schlafTiefschlafMin: sleep.tiefschlafMin,\n  schlafRemSchlafMin: sleep.remSchlafMin,\n  schlafGesamtschlafMin: sleep.gesamtschlafMin,\n  schlafUnterbrechungMin: sleep.unterbrechungMin,\n  schlafKurzeUnterbrechungMin: sleep.kurzeUnterbrechungMin,\n  schlafLangeUnterbrechungMin: sleep.langeUnterbrechungMin,\n  schlafSchlafwert: sleep.schlafwert,\n  schlafSchlafCharge: sleep.schlafCharge,\n  schlafKontinuitaet: sleep.kontinuitaet,\n  schlafKontinuitaetsklasse: sleep.kontinuitaetsklasse,\n  schlafEigenbewertung: sleep.eigenbewertung,\n  schlafSchlafzyklen: sleep.schlafzyklen,\n  schlafDauerwert: sleep.dauerwert,\n  schlafFestigkeitswert: sleep.festigkeitswert,\n  schlafRegenerationswert: sleep.regenerationswert,\n  schlafSchlafzielMin: sleep.schlafzielMin,\n  \n  // SleepWise Data\n  sleepwiseBewertung: sleepwise.bewertung,\n  sleepwiseBewertungstyp: sleepwise.bewertungstyp,\n  sleepwiseBewertungsklassifizierung: sleepwise.bewertungsklassifizierung,\n  sleepwiseSchlaftraegheit: sleepwise.schlaftraegheit,\n  sleepwiseSchlaftyp: sleepwise.schlaftyp,\n  sleepwiseSchlafStart: sleepwise.schlafStart,\n  sleepwiseSchlafEnde: sleepwise.schlafEnde,\n  \n  // Nightly Recharge Data\n  rechargeHerzfrequenzDurchschnitt: recharge.herzfrequenzDurchschnitt,\n  rechargeBeatToBeatDurchschnitt: recharge.beatToBeatDurchschnitt,\n  rechargeHrvDurchschnitt: recharge.hrvDurchschnitt,\n  rechargeAtemfrequenzDurchschnitt: recharge.atemfrequenzDurchschnitt,\n  rechargeNightlyRechargeStatus: recharge.nightlyRechargeStatus,\n  rechargeAnsCharge: recharge.ansCharge,\n  rechargeAnsChargeStatus: recharge.ansChargeStatus\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2944,
+        2400
+      ],
+      "id": "8434d0f5-e024-494f-8e25-ef2c77d83279",
+      "name": "Summarize Data"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "075907ec-e9e0-4d6e-8448-a39e75aeca09",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        2048,
+        2320
+      ],
+      "id": "6b88c05c-ae08-4f99-a501-79b728c47418",
+      "name": "Webhook",
+      "webhookId": "075907ec-e9e0-4d6e-8448-a39e75aeca09"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Chat').item.json.message.chat.id }}",
+        "text": "=={{ $('Code').first().json.antwort }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3952,
+        848
+      ],
+      "id": "b7b35564-20a9-4916-b21d-1fca55dbc1c6",
+      "name": "Send a text message",
+      "webhookId": "9a5bc904-1e54-483a-affa-9fb7e0b06a96",
+      "credentials": {
+        "telegramApi": {
+          "id": "uixAOGqq9dBiAqfR",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "chatgpt-4o-latest",
+          "mode": "list",
+          "cachedResultName": "CHATGPT-4O-LATEST"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.message.text }}"
+            },
+            {
+              "content": "Du bist ein Assistent, der Trainingspläne aus natürlicher Sprache in strukturiertes JSON konvertiert.\n\nExtrahiere aus der folgenden Nachricht: Zyklus-Name, Dauer in Wochen, Trainingstage mit Übungen und Satzzahl.\n\nGib NUR valides JSON zurück:\n{\n  \"zyklus_name\": \"Name\",\n  \"dauer_wochen\": 12,\n  \"trainingstage\": [\n    {\n      \"wochentag\": \"Montag\",\n      \"übungen\": [\n        {\"name\": \"Pull Ups\", \"sätze\": 5}\n      ]\n    }\n  ]\n}",
+              "role": "system"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        2480,
+        1040
+      ],
+      "id": "3a9ac2b3-fea6-40a2-9535-58895dfaf1f1",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "tO7FDa4E5FZCq1pE",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "chatIds": "-4794524069"
+        }
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        2032,
+        1152
+      ],
+      "id": "229a4d95-cb99-483c-9350-012a45d27537",
+      "name": "Chat",
+      "webhookId": "4b581860-a988-400d-a514-bfa454648955",
+      "credentials": {
+        "telegramApi": {
+          "id": "uixAOGqq9dBiAqfR",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const openaiResponse = $input.first().json;\nconst data = openaiResponse.message.content;\n\nlet antwort = `✅ Plan verstanden!\\n\\n`;\nantwort += `📋 Name: ${data.zyklus_name}\\n`;\nantwort += `⏱ Dauer: ${data.dauer_wochen} Wochen\\n`;\nantwort += `📅 Trainingstage: ${data.trainingstage.length}\\n`;\n\nreturn [{\n  json: {\n    antwort: antwort,\n    chat_id: $('Chat').first().json.message.chat.id,\n    parsed_data: data\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2832,
+        1040
+      ],
+      "id": "2895eb64-bf81-4ba5-a265-98833b22e729",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "const zyklusId = $input.first().json.zyklus_id;\nconst trainingstage = $('Code').first().json.parsed_data.trainingstage;\n\n// Erstelle für jeden Trainingstag ein Item\nreturn trainingstage.map((tag, index) => ({\n  json: {\n    zyklus_id: zyklusId,\n    wochentag: tag.wochentag,\n    tag_nummer: index + 1,\n    übungen: tag.übungen\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        1040
+      ],
+      "id": "1de9d98d-2e9f-4805-bdf1-918dbcd5d700",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3504,
+        1040
+      ],
+      "id": "abf1afcd-ff6f-4205-8240-ed89d4659afb",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "resource": "graphDb",
+        "cypherQuery": "=MATCH (tz:Trainingszyklus {id: \"{{ $json.zyklus_id }}\"})\n\nCREATE (tt:Trainingstag {\n  id: randomUUID(),\n  wochentag: \"{{ $json.wochentag }}\",\n  tag_nummer: {{ $json.tag_nummer }},\n  name: \"{{ $json.wochentag }}\" + \" Training\",\n  created_at: datetime()\n})\n\nCREATE (tz)-[:HAT_TRAININGSTAG]->(tt)\n\nRETURN tt.id as trainingstag_id, tt.wochentag as wochentag"
+      },
+      "type": "n8n-nodes-neo4j.neo4j",
+      "typeVersion": 1,
+      "position": [
+        3728,
+        1040
+      ],
+      "id": "d93baf34-ad4f-4f7e-9bb0-b531ca220c4a",
+      "name": "Trainingstag",
+      "credentials": {
+        "neo4jApi": {
+          "id": "PnADSyCcSzFia2ec",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "graphDb",
+        "cypherQuery": "=CREATE (tz:Trainingszyklus {\n  id: randomUUID(),\n  name: \"{{ $json.parsed_data.zyklus_name }}\",\n  dauer_wochen: {{ $json.parsed_data.dauer_wochen }},\n  startdatum: date(),\n  enddatum: date() + duration({weeks: {{ $json.parsed_data.dauer_wochen }}}),\n  trainingstage_pro_woche: {{ $json.parsed_data.trainingstage.length }},\n  status: \"aktiv\",\n  created_at: datetime(),\n  source: \"telegram\"\n})\nRETURN tz.id as zyklus_id, tz.name as name"
+      },
+      "type": "n8n-nodes-neo4j.neo4j",
+      "typeVersion": 1,
+      "position": [
+        3056,
+        1040
+      ],
+      "id": "14631869-879a-4aff-9236-d71caafefad4",
+      "name": "Trainingszyklus",
+      "credentials": {
+        "neo4jApi": {
+          "id": "PnADSyCcSzFia2ec",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3728,
+        848
+      ],
+      "id": "17f044c9-e4ff-493f-b659-26f40684c440",
+      "name": "Aggregate1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const trainingstagId = $input.first().json.trainingstag_id;\nconst übungen = $('Loop Over Items').first().json.übungen;\n\n// Für jede Übung direkt in Neo4j schreiben wäre kompliziert\n// Stattdessen: Alle Übungen in einem Cypher Statement\nconst cypher_statements = übungen.map((übung, index) => {\n  return `\n    MERGE (ue${index}:Übung {name: \"${übung.name}\"})\n    ON CREATE SET ue${index}.id = randomUUID(), \n                  ue${index}.created_at = datetime(),\n                  ue${index}.kategorie = \"Unbekannt\"\n    \n    WITH ue${index}\n    MATCH (tt:Trainingstag {id: \"${trainingstagId}\"})\n    CREATE (gpu${index}:GeplantÜbung {\n      id: randomUUID(),\n      reihenfolge: ${index + 1},\n      ziel_sätze: ${übung.sätze},\n      created_at: datetime()\n    })\n    CREATE (tt)-[:ENTHÄLT]->(gpu${index})\n    CREATE (gpu${index})-[:IST]->(ue${index})\n  `;\n}).join('\\n');\n\nreturn [{\n  json: {\n    trainingstag_id: trainingstagId,\n    cypherQuery: cypher_statements\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3952,
+        1040
+      ],
+      "id": "5822f7e4-b845-4d86-bc5d-f9cb3745d7af",
+      "name": "Code: Übungen erstellen"
+    },
+    {
+      "parameters": {
+        "resource": "graphDb",
+        "cypherQuery": "={{ $json.cypherQuery }}"
+      },
+      "type": "n8n-nodes-neo4j.neo4j",
+      "typeVersion": 1,
+      "position": [
+        4176,
+        1112
+      ],
+      "id": "908450ea-c240-463e-b6be-9e7a15c0e77f",
+      "name": "Übungen batch",
+      "alwaysOutputData": true,
+      "credentials": {
+        "neo4jApi": {
+          "id": "PnADSyCcSzFia2ec",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "graphDb",
+        "cypherQuery": "WITH [\"Sonntag\", \"Montag\", \"Dienstag\", \"Mittwoch\", \"Donnerstag\", \"Freitag\", \"Samstag\"] AS wochentage\nWITH wochentage[date().dayOfWeek] as heute\n\nMATCH (tz:Trainingszyklus {status: \"aktiv\"})\n      -[:HAT_TRAININGSTAG]->(tt:Trainingstag {wochentag: heute})\n      -[:ENTHÄLT]->(gpu:GeplantÜbung)-[:IST]->(ue:Übung)\n\n// Für jede Übung: Hole die letzte Ausführung AUS DEM AKTUELLEN ZYKLUS\nOPTIONAL MATCH (tz)-[:HAT_TRAININGSTAG]->(tt_alt:Trainingstag)\n              -[:ENTHÄLT]->(gpu_alt:GeplantÜbung)-[:IST]->(ue)\nOPTIONAL MATCH (te_letzte:Trainingseinheit)-[:BASIERT_AUF]->(tt_alt)\nOPTIONAL MATCH (te_letzte)-[:BESTEHT_AUS]->(ao_letzte:AusgeführteÜbung)\n              -[:IST_TYP]->(ue)\nWHERE te_letzte.datum < date()\n  AND te_letzte.datum >= tz.startdatum\n\nWITH tz, tt, gpu, ue, ao_letzte\nORDER BY ue.name, ao_letzte.created_at DESC\n\nWITH tz, tt, gpu, ue, collect(ao_letzte)[0] as letzte_ausführung\n\nWITH tz, tt, \n     collect({\n       name: ue.name,\n       reihenfolge: gpu.reihenfolge,\n       ziel_sätze: gpu.ziel_sätze,\n       übung_id: ue.id,\n       geplant_übung_id: gpu.id,\n       letzte_wiederholungen: CASE \n         WHEN letzte_ausführung IS NOT NULL \n         THEN letzte_ausführung.wiederholungen \n         ELSE null \n       END,\n       letztes_gewicht: CASE \n         WHEN letzte_ausführung IS NOT NULL \n         THEN letzte_ausführung.gewicht \n         ELSE null \n       END,\n       letzte_anzahl_sätze: CASE \n         WHEN letzte_ausführung IS NOT NULL \n         THEN letzte_ausführung.anzahl_sätze \n         ELSE null \n       END,\n       letztes_datum: CASE \n         WHEN letzte_ausführung IS NOT NULL \n         THEN toString(letzte_ausführung.created_at) \n         ELSE null \n       END\n     }) as übungen_liste\n\nUNWIND übungen_liste as übung\nWITH tt, tz, übung\nORDER BY übung.reihenfolge\n\nWITH tt, tz, collect(übung) as übungen\n\nRETURN tt.wochentag as wochentag,\n       tt.id as trainingstag_id,\n       tt.name as trainingstag_name,\n       tz.name as zyklus_name,\n       tz.id as zyklus_id,\n       tz.startdatum as zyklus_start,\n       übungen"
+      },
+      "type": "n8n-nodes-neo4j.neo4j",
+      "typeVersion": 1,
+      "position": [
+        2544,
+        1616
+      ],
+      "id": "de3426af-fc72-419a-a7e3-16a40bf9fcf0",
+      "name": "Hole heutigen Trainingsplan",
+      "credentials": {
+        "neo4jApi": {
+          "id": "PnADSyCcSzFia2ec",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const neo4jResult = $input.first().json;\n\n// Übungen sortieren nach Reihenfolge\nconst übungen = neo4jResult.übungen.sort((a, b) => a.reihenfolge - b.reihenfolge);\n\n// Jede Übung als separates Item zurückgeben für den Loop\nreturn übungen.map(übung => ({\n  json: {\n    ...übung,\n    trainingstag_id: neo4jResult.trainingstag_id,\n    wochentag: neo4jResult.wochentag,\n    zyklus_name: neo4jResult.zyklus_name,\n    zyklus_id: neo4jResult.zyklus_id,  // <- NEU HIER!\n    zyklus_start: neo4jResult.zyklus_start,\n    trainingstag_name: neo4jResult.trainingstag_name\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3056,
+        1520
+      ],
+      "id": "3db6f757-b7c8-4f45-bc19-f9f78234fc8b",
+      "name": "Übungen als Array"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3280,
+        1520
+      ],
+      "id": "2d110c17-340f-4b6e-8848-1c2b4e1058d9",
+      "name": "Loop Übungen"
+    },
+    {
+      "parameters": {
+        "chatId": "-4794524069",
+        "text": "=💪 {{ $json.name }} <a href=\"{{ $execution.resumeUrl }}\">!</a>\n\n🎯 Ziel: {{ $json.ziel_sätze }} Sätze\n\n{{ $json.letzte_wiederholungen ? '📊 Letztes Mal:\\n' + $json.letzte_anzahl_sätze + ' Sätze: ' + $json.letzte_wiederholungen.join(', ') + ' Wdh' + ($json.letztes_gewicht && $json.letztes_gewicht.some(g => g > 0) ? '\\nGewicht: ' + $json.letztes_gewicht.join(', ') + ' kg' : '') + '\\n\\n' : '🆕 Erste Ausführung!\\n\\n' }}Schreibe deine Wiederholungen pro Satz (z.B. 10, 9, 8, 7, 6 oder 10kg x 8, 10kg x 8, 12.5kg x 6)",
+        "replyMarkup": "forceReply",
+        "forceReply": {
+          "force_reply": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3504,
+        1520
+      ],
+      "id": "86f7498f-a911-488e-99e9-64978fd50d28",
+      "name": "Text Message Übungen",
+      "webhookId": "78189cde-bcdc-45df-8e24-071f9f216f88",
+      "credentials": {
+        "telegramApi": {
+          "id": "uixAOGqq9dBiAqfR",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3728,
+        1520
+      ],
+      "id": "f0d4e959-abd4-40c1-8b9c-b7e703454a8e",
+      "name": "Wait Response",
+      "webhookId": "85650975-f935-4e97-91b0-01a0bcfa07cd"
+    },
+    {
+      "parameters": {
+        "jsCode": "const antwort = $json.query.response || $json.body.message.text;\nconst übung = $('Loop Übungen').item.json;\n\n// Parse die Eingabe (z.B. \"10, 9, 8\" oder \"80kg x 10, 85kg x 8\")\nconst sätze = antwort.split(',').map(s => s.trim());\n\n// Extrahiere Gewicht und Wiederholungen\nconst satzData = sätze.map(satz => {\n  // Format: \"80kg x 10\" oder \"10kg x 8\" oder nur \"10\"\n  const match = satz.match(/(?:(\\d+(?:\\.\\d+)?)\\s*kg\\s*x?\\s*)?(\\d+)/i);\n  \n  if (match) {\n    return {\n      gewicht: match[1] ? parseFloat(match[1]) : 0,\n      wiederholungen: parseInt(match[2])\n    };\n  }\n  \n  // Fallback: nur Wiederholungen\n  return {\n    gewicht: 0,\n    wiederholungen: parseInt(satz)\n  };\n});\n\nreturn [{\n  json: {\n    übung_name: übung.name,\n    übung_id: übung.übung_id,\n    geplant_übung_id: übung.geplant_übung_id,\n    trainingstag_id: übung.trainingstag_id,\n    zyklus_name: übung.zyklus_name,\n    zyklus_id: übung.zyklus_id,  // <- NEU!\n    zyklus_start: übung.zyklus_start,  // <- NEU!\n    original_antwort: antwort,\n    sätze: satzData,\n    anzahl_sätze: satzData.length\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3952,
+        1592
+      ],
+      "id": "5d935827-74fa-4827-9095-705597dad205",
+      "name": "Parse Antwort"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.text }}",
+                    "rightValue": "/help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "152fe5b5-b17d-4bff-844e-749df4c57409"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Help"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "bba1135e-0c02-4d32-bad6-ea2dd78b9263",
+                    "leftValue": "={{ $json.message.text }}",
+                    "rightValue": "/training",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Training Log"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4c2cd59a-1876-4f7e-8768-7a6b742f6f09",
+                    "leftValue": "={{ $json.message.text }}",
+                    "rightValue": "/cycle",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Training Cycle"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "fceef163-da6e-4019-abad-09190c01d3a2",
+                    "leftValue": "={{ $json.message.text }}",
+                    "rightValue": "/journal",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Journal"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2256,
+        1104
+      ],
+      "id": "af70eb64-50e7-44d8-8aca-4a996e3b8a74",
+      "name": "Distributor1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.stdout }}",
+                    "rightValue": "training_log_true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "f5322ac6-4577-467b-9ca3-0ed4fc2b8c8f"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Training Log"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "47bcb4c2-f497-4e00-a8d7-10d0fcdabf79",
+                    "leftValue": "={{ $json.stdout }}",
+                    "rightValue": "training_cycle_true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Training Cycle"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3b11e283-5561-41d0-9dec-803ad568bc28",
+                    "leftValue": "={{ $json.stdout }}",
+                    "rightValue": "journal_true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Journal"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2544,
+        1248
+      ],
+      "id": "8f9e4f5c-ba38-4a6d-bdaf-5d7e610d5828",
+      "name": "Session Handler1"
+    },
+    {
+      "parameters": {
+        "chatId": "-4794524069",
+        "text": "=/help - Hilfe zum Coach\n/training - Ich schick dir dein WoD (Workout of the Day) und du kannst interaktiv inline dein Training loggen\n/cycle - Schreib mir einfach deine Vorstellung, wie oft du in der Woche trainieren willst und was. Ich bau dir deinen Plan.\n/journal - Schreib mir, wie dein Tag lief und wie du dich heute fühlst. (Voice Message geht natürlich auch :))",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2544,
+        848
+      ],
+      "id": "eadf483c-4157-481d-89a7-4aa3953c6840",
+      "name": "Send Coach Instructions1",
+      "webhookId": "106e3397-fbe1-4fca-bb0b-edc3bf3e794f",
+      "credentials": {
+        "telegramApi": {
+          "id": "uixAOGqq9dBiAqfR",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3056,
+        1280
+      ],
+      "id": "f66e5fb0-624c-4e79-9311-78c8e61dfac5",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Chat').item.json.message.reply_to_message.entities[0].url }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "response",
+              "value": "={{ $('Chat').item.json.message.text }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 100
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2832,
+        1280
+      ],
+      "id": "717abfe7-4b1e-4c6f-8bc4-e17716781820",
+      "name": "HTTP Request4",
+      "alwaysOutputData": false,
+      "executeOnce": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Alle Übungen aus dem Loop sammeln\nconst alleÜbungen = $input.all().map(item => item.json);\n\n// Allgemeine Session-Daten (vom ersten Item)\nconst sessionData = alleÜbungen[0];\nconst datum = new Date().toISOString().split('T')[0];\n\n// Cypher Query zusammenbauen - MIT den WITH Statements!\nconst cypherQuery = `\n// 1. Tag-Node erstellen/finden\nMERGE (tag:Tag {datum: date(\"${datum}\")})\nON CREATE SET \n  tag.wochentag = date(\"${datum}\").dayOfWeek,\n  tag.created_at = datetime()\n\nWITH tag\n\n// 2. Trainingseinheit erstellen\nCREATE (te:Trainingseinheit {\n  id: randomUUID(),\n  startzeit: datetime(),\n  datum: date(\"${datum}\"),\n  anzahl_übungen: ${alleÜbungen.length},\n  gesamte_sätze: ${alleÜbungen.reduce((sum, ü) => sum + ü.anzahl_sätze, 0)},\n  source: \"telegram\",\n  created_at: datetime()\n})\n\nCREATE (tag)-[:HATTE_TRAINING]->(te)\n\nWITH te\n\n// 3. Trainingstag-Beziehung\nMATCH (tt:Trainingstag {id: \"${sessionData.trainingstag_id}\"})\nCREATE (te)-[:BASIERT_AUF]->(tt)\n\nWITH te\n\nMATCH (tz:Trainingszyklus {id: \"${sessionData.zyklus_id}\"})\nCREATE (tz)-[:ENTHÄLT_TRAINING]->(te)\n\nWITH te\n\n// 4. Übungen speichern\n${alleÜbungen.map((übung, index) => `\nMATCH (ue${index}:Übung {id: \"${übung.übung_id}\"})\nMATCH (gpu${index}:GeplantÜbung {id: \"${übung.geplant_übung_id}\"})\n\nWITH te, ue${index}, gpu${index}\n\nCREATE (ao${index}:AusgeführteÜbung {\n  id: randomUUID(),\n  reihenfolge: ${index + 1},\n  anzahl_sätze: ${übung.anzahl_sätze},\n  wiederholungen: [${übung.sätze.map(s => s.wiederholungen).join(', ')}],\n  gewicht: [${übung.sätze.map(s => s.gewicht).join(', ')}],\n  original_eingabe: \"${übung.original_antwort}\",\n  created_at: datetime()\n})\n\nCREATE (te)-[:BESTEHT_AUS]->(ao${index})\nCREATE (ao${index})-[:IST_TYP]->(ue${index})\nCREATE (ao${index})-[:GEPLANT_ALS]->(gpu${index})\n\nWITH te\n`).join('\\n')}\n\nWITH te\n\n// Verknüpfe Training mit Zyklus\nMATCH (tz:Trainingszyklus {id: \"${sessionData.zyklus_id}\"})\nCREATE (tz)-[:ENTHÄLT_TRAINING]->(te)\n\nRETURN te.id as trainingseinheit_id, \n       te.gesamte_sätze as total_sätze,\n       te.anzahl_übungen as anzahl_übungen\n`;\n\nreturn [{\n  json: {\n    cypherQuery: cypherQuery,\n    datum: datum,\n    trainingstag_id: sessionData.trainingstag_id,\n    zyklus_name: sessionData.zyklus_name,\n    übungen: alleÜbungen,\n    anzahl_übungen: alleÜbungen.length,\n    gesamte_sätze: alleÜbungen.reduce((sum, ü) => sum + ü.anzahl_sätze, 0)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3504,
+        1328
+      ],
+      "id": "bcacd080-e6fa-4a55-8825-937e1c16d6ab",
+      "name": "Daten für Neo4j vorbereiten"
+    },
+    {
+      "parameters": {
+        "resource": "graphDb",
+        "cypherQuery": "={{ $json.cypherQuery }}"
+      },
+      "type": "n8n-nodes-neo4j.neo4j",
+      "typeVersion": 1,
+      "position": [
+        3728,
+        1328
+      ],
+      "id": "102d52ac-d99f-43ac-b1e7-0002ee210e3e",
+      "name": "Speichere Trainingseinheit",
+      "alwaysOutputData": true,
+      "credentials": {
+        "neo4jApi": {
+          "id": "PnADSyCcSzFia2ec",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "-4794524069",
+        "text": "=✅ Training abgeschlossen!\n\n📊 Zusammenfassung:\n- Übungen: {{ $('Daten für Neo4j vorbereiten').item.json.anzahl_übungen }}\n- Gesamte Sätze: {{ $('Daten für Neo4j vorbereiten').item.json.gesamte_sätze }}\n- Datum: {{ $('Daten für Neo4j vorbereiten').item.json.datum }}\n\nGut gemacht! 💪",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3952,
+        1328
+      ],
+      "id": "e5ed9ec4-e15f-4abf-b4b3-00f13158bce4",
+      "name": "Bestätigung Training beendet",
+      "webhookId": "1ded49a9-3359-43f6-9c65-eb99c5c10b7a",
+      "credentials": {
+        "telegramApi": {
+          "id": "uixAOGqq9dBiAqfR",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "graphDb",
+        "cypherQuery": "={{ $json.cypherQuery }}"
+      },
+      "type": "n8n-nodes-neo4j.neo4j",
+      "typeVersion": 1,
+      "position": [
+        2944,
+        2016
+      ],
+      "id": "6c649117-f6a3-4080-9d33-7ee4e6e5e6de",
+      "name": "Speichere Activity in Neo4j",
+      "credentials": {
+        "neo4jApi": {
+          "id": "PnADSyCcSzFia2ec",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "graphDb",
+        "cypherQuery": "={{ $json.cypherQuery }}"
+      },
+      "type": "n8n-nodes-neo4j.neo4j",
+      "typeVersion": 1,
+      "position": [
+        3392,
+        2400
+      ],
+      "id": "4d447add-48af-4224-9f72-42ccc935b96d",
+      "name": "Speichere Sleep in Neo4j",
+      "credentials": {
+        "neo4jApi": {
+          "id": "PnADSyCcSzFia2ec",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nconst cypherQuery = `\n// Tag-Node finden oder erstellen\nMERGE (tag:Tag {datum: date(\"${data.datum_iso}\")})\nON CREATE SET \n  tag.wochentag = date(\"${data.datum_iso}\").dayOfWeek,\n  tag.jahr = ${data.datum_iso.split('-')[0]},\n  tag.monat = ${data.datum_iso.split('-')[1]},\n  tag.created_at = datetime()\n\nWITH tag\n\n// Activity Node erstellen oder aktualisieren\nMERGE (activity:Activity {datum: date(\"${data.datum_iso}\"), user_id: \"polar_user\"})\nON CREATE SET\n  activity.id = randomUUID(),\n  activity.source = \"polar_api\",\n  activity.created_at = datetime()\nSET\n  activity.aktiv_dauer_min = ${data.aktivDauerMin},\n  activity.inaktiv_dauer_min = ${data.inaktivDauerMin},\n  activity.tages_aktivitaet = ${data.tagesAktivitaet},\n  activity.kalorien = ${data.kalorien},\n  activity.aktive_kalorien = ${data.aktiveKalorien},\n  activity.schritte = ${data.schritte},\n  activity.inaktivitaets_warnungen = ${data.inaktivitaetsWarnungen},\n  activity.distanz_meter = ${data.distanzMeter},\n  activity.updated_at = datetime()\n\nMERGE (tag)-[:HATTE_AKTIVITÄT]->(activity)\n\nRETURN activity.datum as datum, activity.schritte as schritte\n`;\n\nreturn [{\n  json: {\n    cypherQuery: cypherQuery,\n    datum: data.datum_iso\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        2016
+      ],
+      "id": "0295f41b-169d-4368-90ae-d5578e5f5e59",
+      "name": "Build Activity Cypher"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nconst cypherQuery = `\n// Tag-Node finden oder erstellen\nMERGE (tag:Tag {datum: date(\"${data.datum_iso}\")})\nON CREATE SET \n  tag.wochentag = date(\"${data.datum_iso}\").dayOfWeek,\n  tag.jahr = ${data.jahr},\n  tag.monat = ${data.monat},\n  tag.created_at = datetime()\n\nWITH tag\n\n// Sleep Node erstellen oder aktualisieren\nMERGE (sleep:Sleep {datum: date(\"${data.datum_iso}\"), user_id: \"polar_user\"})\nON CREATE SET\n  sleep.id = randomUUID(),\n  sleep.source = \"polar_api\",\n  sleep.created_at = datetime()\nSET\n  sleep.startzeit = datetime(\"${data.schlafStartzeit}\"),\n  sleep.endzeit = datetime(\"${data.schlafEndzeit}\"),\n  sleep.leichtschlaf_min = ${data.schlafLeichtschlafMin},\n  sleep.tiefschlaf_min = ${data.schlafTiefschlafMin},\n  sleep.rem_schlaf_min = ${data.schlafRemSchlafMin},\n  sleep.gesamtschlaf_min = ${data.schlafGesamtschlafMin},\n  sleep.unterbrechung_min = ${data.schlafUnterbrechungMin},\n  sleep.kurze_unterbrechung_min = ${data.schlafKurzeUnterbrechungMin},\n  sleep.lange_unterbrechung_min = ${data.schlafLangeUnterbrechungMin},\n  sleep.schlafwert = ${data.schlafSchlafwert},\n  sleep.schlaf_charge = ${data.schlafSchlafCharge},\n  sleep.kontinuitaet = ${data.schlafKontinuitaet},\n  sleep.kontinuitaetsklasse = ${data.schlafKontinuitaetsklasse},\n  sleep.eigenbewertung = ${data.schlafEigenbewertung},\n  sleep.schlafzyklen = ${data.schlafSchlafzyklen},\n  sleep.dauer_score = ${data.schlafDauerwert},\n  sleep.festigkeit_score = ${data.schlafFestigkeitswert},\n  sleep.regenerations_score = ${data.schlafRegenerationswert},\n  sleep.schlafziel_min = ${data.schlafSchlafzielMin},\n  sleep.sleepwise_bewertung = ${data.sleepwiseBewertung},\n  sleep.sleepwise_bewertungstyp = \"${data.sleepwiseBewertungstyp}\",\n  sleep.sleepwise_klassifizierung = \"${data.sleepwiseBewertungsklassifizierung}\",\n  sleep.sleepwise_traegheit = \"${data.sleepwiseSchlaftraegheit}\",\n  sleep.sleepwise_typ = \"${data.sleepwiseSchlaftyp}\",\n  sleep.recharge_herzfrequenz_avg = ${data.rechargeHerzfrequenzDurchschnitt},\n  sleep.recharge_beat_to_beat_avg = ${data.rechargeBeatToBeatDurchschnitt},\n  sleep.recharge_hrv_avg = ${data.rechargeHrvDurchschnitt},\n  sleep.recharge_atemfrequenz_avg = ${data.rechargeAtemfrequenzDurchschnitt},\n  sleep.recharge_status = ${data.rechargeNightlyRechargeStatus},\n  sleep.recharge_ans_charge = ${data.rechargeAnsCharge},\n  sleep.recharge_ans_status = ${data.rechargeAnsChargeStatus},\n  sleep.updated_at = datetime()\n\nMERGE (tag)-[:HATTE_SCHLAF]->(sleep)\n\nRETURN sleep.datum as datum, sleep.schlafwert as score, sleep.gesamtschlaf_min as minuten\n`;\n\nreturn [{\n  json: {\n    cypherQuery: cypherQuery,\n    datum: data.datum_iso\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3168,
+        2400
+      ],
+      "id": "4a74c7e7-ece7-413b-b6ca-28cca3f3af9a",
+      "name": "Build Sleep Cypher"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * *"
+            }
+          ]
+        }
+      },
+      "id": "1d5e98fe-5d43-4fc5-9c7a-72ce1af60f77",
+      "name": "Täglich um 05:00 Uhr",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        2080,
+        3040
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "graphDb",
+        "cypherQuery": "MATCH (tz:Trainingszyklus {status: \"aktiv\"})\nWHERE tz.enddatum < date()\n\nSET tz.status = \"abgeschlossen\",\n    tz.abgeschlossen_am = datetime()\n\nRETURN tz.name as name,\n       tz.startdatum as start,\n       tz.enddatum as ende,\n       tz.dauer_wochen as wochen"
+      },
+      "type": "n8n-nodes-neo4j.neo4j",
+      "typeVersion": 1,
+      "position": [
+        2304,
+        3040
+      ],
+      "id": "40f93bd3-64fa-4e2b-adca-d0405a1406ae",
+      "name": "Prüfe abgelaufene Zyklen",
+      "credentials": {
+        "neo4jApi": {
+          "id": "PnADSyCcSzFia2ec",
+          "name": "Neo4j account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d3c81cfe-a72d-40b2-b390-8c0babe41d82",
+              "leftValue": "={{ $json.name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2528,
+        3040
+      ],
+      "id": "02ddc612-3d89-436f-8f34-96cf16002a08",
+      "name": "Wurde ein Zyklus beendet?"
+    },
+    {
+      "parameters": {
+        "chatId": "-4794524069",
+        "text": "=🏁 Trainingszyklus beendet!\n\nDer Zyklus \"{{ $('Prüfe abgelaufene Zyklen').item.json.name }}\" ist abgeschlossen.\n\n📅 Dauer: {{ $('Prüfe abgelaufene Zyklen').item.json.wochen }} Wochen\n📆 Start: {{ $('Prüfe abgelaufene Zyklen').item.json.start }}\n📆 Ende: {{ $('Prüfe abgelaufene Zyklen').item.json.ende }}\n\n💪 Bereit für einen neuen Zyklus?\nErstelle einen neuen mit deiner Telegram-Nachricht!",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2752,
+        3040
+      ],
+      "id": "69efcbf4-cf76-4c7a-a23a-097015c55ba4",
+      "name": "Benachrichtigung",
+      "webhookId": "ed03b845-8530-42a8-bb0a-40ee55f190d8",
+      "credentials": {
+        "telegramApi": {
+          "id": "uixAOGqq9dBiAqfR",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "157f43ab-125e-483c-8ae2-0cea187b69fe",
+              "leftValue": "={{ $json.zyklus_name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2832,
+        1616
+      ],
+      "id": "6029ef75-10c0-441e-9917-896de0eb0e07",
+      "name": "Aktiver Zyklus vorhanden?"
+    },
+    {
+      "parameters": {
+        "chatId": "-4794524069",
+        "text": "⚠️ Kein aktiver Trainingszyklus!\n\nDu hast aktuell keinen laufenden Trainingszyklus.\n\nErstelle einen neuen Zyklus über eine Telegram-Nachricht.\n\nBeispiel:\n\"Neuer Zyklus '3 - Power Phase' für 8 Wochen...\"",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3056,
+        1712
+      ],
+      "id": "64d69aa0-de6b-4da3-986e-1d9bed385bd8",
+      "name": "Kein Trainings Zyklus",
+      "webhookId": "1564db2c-f747-46ec-9cee-07cfe3b3fea1",
+      "credentials": {
+        "telegramApi": {
+          "id": "uixAOGqq9dBiAqfR",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Chat": [
+      {
+        "json": {
+          "update_id": 896249571,
+          "message": {
+            "message_id": 2555,
+            "from": {
+              "id": 7832749280,
+              "is_bot": false,
+              "first_name": "Alexander",
+              "last_name": "Stauber",
+              "language_code": "de"
+            },
+            "chat": {
+              "id": -4794524069,
+              "title": "Coach JARVIS",
+              "type": "group",
+              "all_members_are_administrators": true,
+              "accepted_gift_types": {
+                "unlimited_gifts": false,
+                "limited_gifts": false,
+                "unique_gifts": false,
+                "premium_subscription": false
+              }
+            },
+            "date": 1760894029,
+            "text": "/training",
+            "entities": [
+              {
+                "offset": 0,
+                "length": 9,
+                "type": "bot_command"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "1. Activity Data (Gestern)": {
+      "main": [
+        [
+          {
+            "node": "5a. Transform Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Sleep Data (Letzte Nacht)": {
+      "main": [
+        [
+          {
+            "node": "5b. Transform Sleep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. SleepWise (Letzte Nacht)": {
+      "main": [
+        [
+          {
+            "node": "5c. Transform SleepWise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Nightly Recharge (Letzte Nacht)": {
+      "main": [
+        [
+          {
+            "node": "5d. Transform Nightly Recharge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5a. Transform Activity": {
+      "main": [
+        [
+          {
+            "node": "Build Activity Cypher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5b. Transform Sleep": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "5c. Transform SleepWise": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "5d. Transform Nightly Recharge": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Summarize Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Data": {
+      "main": [
+        [
+          {
+            "node": "Build Sleep Cypher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat": {
+      "main": [
+        [
+          {
+            "node": "Distributor1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Trainingszyklus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Aggregate1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trainingstag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trainingstag": {
+      "main": [
+        [
+          {
+            "node": "Code: Übungen erstellen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trainingszyklus": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate1": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Übungen erstellen": {
+      "main": [
+        [
+          {
+            "node": "Übungen batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Übungen batch": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hole heutigen Trainingsplan": {
+      "main": [
+        [
+          {
+            "node": "Aktiver Zyklus vorhanden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Übungen als Array": {
+      "main": [
+        [
+          {
+            "node": "Loop Übungen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Übungen": {
+      "main": [
+        [
+          {
+            "node": "Daten für Neo4j vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Text Message Übungen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Message Übungen": {
+      "main": [
+        [
+          {
+            "node": "Wait Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Response": {
+      "main": [
+        [
+          {
+            "node": "Parse Antwort",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Antwort": {
+      "main": [
+        [
+          {
+            "node": "Loop Übungen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Distributor1": {
+      "main": [
+        [
+          {
+            "node": "Send Coach Instructions1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hole heutigen Trainingsplan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [
+          {
+            "node": "Session Handler1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Handler1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [],
+        [
+          {
+            "node": "HTTP Request4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request4": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daten für Neo4j vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "Speichere Trainingseinheit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speichere Trainingseinheit": {
+      "main": [
+        [
+          {
+            "node": "Bestätigung Training beendet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Activity Cypher": {
+      "main": [
+        [
+          {
+            "node": "Speichere Activity in Neo4j",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Sleep Cypher": {
+      "main": [
+        [
+          {
+            "node": "Speichere Sleep in Neo4j",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "1. Activity Data (Gestern)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "2. Sleep Data (Letzte Nacht)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "3. SleepWise (Letzte Nacht)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "4. Nightly Recharge (Letzte Nacht)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Täglich um 05:00 Uhr": {
+      "main": [
+        [
+          {
+            "node": "Prüfe abgelaufene Zyklen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prüfe abgelaufene Zyklen": {
+      "main": [
+        [
+          {
+            "node": "Wurde ein Zyklus beendet?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wurde ein Zyklus beendet?": {
+      "main": [
+        [
+          {
+            "node": "Benachrichtigung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aktiver Zyklus vorhanden?": {
+      "main": [
+        [
+          {
+            "node": "Übungen als Array",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Kein Trainings Zyklus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "83c8ae0f-ac8d-4195-9664-3951ec2d9fc7",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d622b895052c38fec932f62e87fcc4098b40ba3c52269b2cc1cfb8c0630ea273"
+  },
+  "id": "w9YcMr3rA3tL5x0i",
+  "tags": []
+}
